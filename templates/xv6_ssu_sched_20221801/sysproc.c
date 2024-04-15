@@ -91,25 +91,11 @@ sys_uptime(void)
 }
 
 int
-sys_ps(void)
+sys_fork_rt(void)
 {
-	return ps();
-}
-
-int
-sys_setnice(void)
-{
-	int pid, nice;
-	if (argint(0, &pid) < 0 || argint(1, &nice) < 0)
+	int priority;
+	if (argint(0, &priority) < 0 || PRIORITY < argint(0, &priority))
 		return -1;
-	return setnice(pid, nice);
-}
+	return fork_rt(priority);
 
-int
-sys_getnice(void)
-{
-	int pid;
-	if (argint(0, &pid) < 0)
-		return -1;
-	return getnice(pid);
 }

@@ -120,9 +120,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-int		ps(void);
-int		setnice(int pid, int nice);
-int		getnice(int pid);
+int							fork_rt(int priority);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

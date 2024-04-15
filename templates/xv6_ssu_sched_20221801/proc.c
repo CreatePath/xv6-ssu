@@ -88,7 +88,8 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->priority = PRIORITY; // allocate default priority 
+  p->priority = PRIORITY;
+	p->isrr = 1;
 
   release(&ptable.lock);
 
@@ -200,6 +201,8 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->priority = curproc->priority;
+	np->isrr = 1;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -216,9 +219,56 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  np->priority = curproc->priority;
 
   release(&ptable.lock);
+
+  return pid;
+}
+
+int
+fork_rt(int priority)
+{
+  int i, pid = 0;
+  struct proc *np;
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+  np->priority = priority;
+	np->isrr = 0;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  yield();
 
   return pid;
 }
@@ -324,8 +374,9 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
+  struct proc *p, *prior_proc;
   struct cpu *c = mycpu();
+
   c->proc = 0;
   
   for(;;){
@@ -334,26 +385,48 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+		prior_proc = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+			if(!p->isrr){
+				if(!prior_proc || (prior_proc&& p->priority < prior_proc->priority))
+					prior_proc = p;
+			}	
+		}
+		
+		if(prior_proc) {
+			c->proc = prior_proc;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+			switchuvm(prior_proc);
+			prior_proc->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+			swtch(&(c->scheduler), prior_proc->context);
+			switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
-    release(&ptable.lock);
+			// Process is done running for now.
+			// It should have changed its p->state before coming back.
+			c->proc = 0;
+		}
+		else {
+			for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+				if (p->state != RUNNABLE)
+					continue;
+				c->proc = p;
 
+				switchuvm(p);
+				p->state = RUNNING;
+
+				swtch(&(c->scheduler), p->context);
+				switchkvm();
+
+				// Process is done running for now.
+				// It should have changed its p->state before coming back.
+				c->proc = 0;
+			}
+		}
+
+		release(&ptable.lock);
   }
 }
 
@@ -534,65 +607,3 @@ procdump(void)
     cprintf("\n");
   }
 }
-
-
-#ifdef PRIORITY
-int setnice(int pid, int nice)
-{
-    if( nice < 0 || nice > 30)
-        return -1;
-
-    struct proc *p;
-    acquire(&ptable.lock);
-
-    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-	    if (p->pid != pid) continue;
-	    p->priority = nice;
-	    break;
-    }
-
-    release(&ptable.lock);
-    return -1;
-}
-
-int getnice(int pid)
-{
-    struct proc *p;
-    int nice = -1;
-    acquire(&ptable.lock);
-
-    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-	    if (p->pid != pid) continue;
-	    nice = p->priority;
-	    break;
-    }
-
-    release(&ptable.lock);
-    return nice;
-}
-
-int ps(void)
-{
-
-    struct proc *p; 
-    static char *states[] = {
-	  [UNUSED]    "unused",
-	  [EMBRYO]    "embryo",
-	  [SLEEPING]  "sleep ",
-	  [RUNNABLE]  "runnable",
-	  [RUNNING]   "running",
-	  [ZOMBIE]    "zombie"
-    };
-    acquire(&ptable.lock);
-    cprintf("name\tpid \t state \t priority \t runtime \t tick %d\n",ticks);
-    for(p = ptable.proc; (p < &ptable.proc[NPROC]) && (p->pid); p++){
-	    cprintf("%s\t", p->name);
-	    cprintf("%d \t ", p->pid);
-	    cprintf("%s \t ", states[p->state]);
-	    cprintf("%d \t ", p->priority);
-	    cprintf("%d \n ", p->runtime);
-    }	    
-    release(&ptable.lock);
-    return 0;
-}
-#endif
