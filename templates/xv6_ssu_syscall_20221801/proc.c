@@ -588,7 +588,9 @@ int ps(void)
     };
     acquire(&ptable.lock);
     cprintf("name\tpid \t state \t priority \t runtime \t tick %d\n",ticks);
-    for(p = ptable.proc; (p < &ptable.proc[NPROC]) && (p->pid); p++){
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+			if (!p->pid)
+				continue;
 	    cprintf("%s\t", p->name);
 	    cprintf("%d \t ", p->pid);
 	    cprintf("%s \t ", states[p->state]);
