@@ -9,5 +9,8 @@
   2. System Call: xv6에 systemcall 추가하기
   3. Scheduler: RoundRobin + RealTime(어렵진 않으니 조건 잘 살펴보기)
   4. Memory Allocator: Slab Allocator 구현
-  5. File system: copy-on-write 구현 (기말 시즌이라 대충했는데 좋은 구현은 아닌듯. 기억이 가물가물해서 설명을 잘 못하겠다. 이 과제 보여주다가 치팅 걸린거라 이대로 구현해도 점수 주시는지 모르겠음)
+  5. File system: copy-on-write 구현
+     - 기말 시즌이라 대충했는데 좋은 구현은 아닌듯.
+     - 기억이 가물가물해서 설명을 잘 못하겠다.
+     - 이 과제 보여주다가 치팅 걸린거라 이대로 구현해도 점수 주시는지 모르겠음
 - 교수님의 수업을 열심히 듣고 조건에 맞게 잘 설계하시고 구현하시면 됩니다.
